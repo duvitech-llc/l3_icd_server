@@ -156,6 +156,8 @@ void *connection_handler(void *socket_desc)
 		pCommandReceived = (struct command_packet*)client_message;
 		length = pCommandReceived->length;
 
+		printf("Read PacketSize: %ul, ReadSize: %ul", read_size, length);
+
 		/*
 		// get lock
 	    pthread_mutex_lock(&lock);
