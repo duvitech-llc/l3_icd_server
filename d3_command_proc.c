@@ -246,7 +246,7 @@ bool send_receive_packet(struct command_packet sendPacket, struct response_packe
 		rxBuffer = (uint8_t*)malloc(respLen);
 		respLen = 2;
 		for (x = 0; x < respLen; x++){
-			nRec = read (mPort, &(rxBuffer[x]), 1);
+			nRec = read(mPort, &(rxBuffer[x]), 1);
 			if(nRec != 1){
 				printf("Failed Read Bytes: %d\n", nRec);
 			}

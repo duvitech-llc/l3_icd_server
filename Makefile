@@ -1,6 +1,6 @@
 ##### Change the following for your environment:
 -include ../Rules.make
-CROSS_COMPILE?=		/opt/arm-2009q3/bin/arm-none-linux-gnueabi-
+CROSS_COMPILE?=		/opt/arm-2009q1/bin/arm-none-linux-gnueabi-
 COMPILE_OPTS =		$(INCLUDES) -I. -O2 -DSOCKLEN_T=socklen_t -DNO_SSTREAM=1 -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64  
 C =			c
 C_COMPILER =		$(CROSS_COMPILE)gcc

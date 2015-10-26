@@ -36,6 +36,9 @@
 extern char* portname;
 int fd = 0;
 
+pthread_mutex_t lock;
+
+
 //the thread function
 void *connection_handler(void *);
 
@@ -43,6 +46,13 @@ int start_tcp_listener(void){
 
     int socket_desc , client_sock , c;
     struct sockaddr_in server , client;
+
+    // create mutex
+    if (pthread_mutex_init(&lock, NULL) != 0)
+	{
+		puts("\n mutex init failed\n");
+		return 1;
+	}
 
     // open serial port
     fd = open_port(portname);
@@ -107,6 +117,8 @@ int start_tcp_listener(void){
     }
 
 	close_port();
+	pthread_mutex_destroy(&lock);
+
     return 0;
 
 }
@@ -136,12 +148,18 @@ void *connection_handler(void *socket_desc)
     //Receive a message from client
     while( (read_size = recv(sock , client_message , BUFFSIZE , 0)) > 0 )
     {
+    	int length;
+
         //end of string marker
 		client_message[read_size] = '\0';
-
 		// send the command to the UART
 		pCommandReceived = (struct command_packet*)client_message;
+		length = pCommandReceived->length;
 
+		/*
+		// get lock
+	    pthread_mutex_lock(&lock);
+		// send and receive to uart
 		if(!send_receive_packet(*pCommandReceived, pResponseToSend)){
 			// create a standard error packet
 	        puts("Error sending and receiving from uart\n");
@@ -158,6 +176,9 @@ void *connection_handler(void *socket_desc)
 
 		}
 
+		// unlock
+		pthread_mutex_unlock(&lock);
+
 		//Send the response back to client
         write(sock , pResponseToSend , pResponseToSend->length);
 
@@ -167,6 +188,8 @@ void *connection_handler(void *socket_desc)
 
         // clear the response buffer
 		memset(pResponseToSend, 0, BUFFSIZE);
+*/
+		write(sock , client_message , strlen(client_message));
 
 		//clear the message buffer
 		memset(client_message, 0, BUFFSIZE);
