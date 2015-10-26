@@ -46,12 +46,23 @@ bool set_reticle(enum enumReticle_Ids reticleId){
 
 	send_receive_packet(pSendPacket, &pRespPacket);
 
-	if(pRespPacket.status == 0)
+	printf("checking response packet\n");
+	if(pRespPacket.status == 0){
+		printf("Call Success\n");
 		bSuccess = true;
+	}else
+	{
+		printf("Call failed\n");
+	}
 
 	// always check pData because it will be a memory leak
-	if(pRespPacket.pData)
+
+	if(pRespPacket.pData){
+		printf("Freeing memory\n");
 		free(pRespPacket.pData);
+	}
+
+	printf("Returning to caller\n");
 
 	return bSuccess;
 }

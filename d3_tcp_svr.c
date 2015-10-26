@@ -129,14 +129,13 @@ void *connection_handler(void *socket_desc)
     int sock = *(int*)socket_desc;
     int read_size;
     char *message , client_message[BUFFSIZE];
-
     uint8_t transmitBuffer[BUFFSIZE];
 
-    struct command_packet* pCommandReceived;
-    struct response_packet* pResponseToSend = (struct response_packet*)transmitBuffer;
+    struct command_packet pCommandReceived;
+    struct response_packet ResponseToSend;
 
     // clear the response buffer
-	memset(pResponseToSend, 0, BUFFSIZE);
+	memset(transmitBuffer, 0, BUFFSIZE);
 /*
     //Send some messages to the client
     message = "Greetings! I am your connection handler\n";
@@ -153,44 +152,47 @@ void *connection_handler(void *socket_desc)
         //end of string marker
 		client_message[read_size] = '\0';
 		// send the command to the UART
-		pCommandReceived = (struct command_packet*)client_message;
-		length = pCommandReceived->length;
+		if(read_size>2){
+			pCommandReceived.length = read_size;
+			length = pCommandReceived.length;
 
-		printf("Read PacketSize: %ul, ReadSize: %ul", read_size, length);
+			// decode packet
+			printf("Read PacketSize: %ul, ReadSize: %ul", read_size, length);
 
-		/*
-		// get lock
-	    pthread_mutex_lock(&lock);
-		// send and receive to uart
-		if(!send_receive_packet(*pCommandReceived, pResponseToSend)){
-			// create a standard error packet
-	        puts("Error sending and receiving from uart\n");
-	        if(pResponseToSend->pData != 0){
-	        	free(pResponseToSend->pData);
-	        	pResponseToSend->pData = 0;
-	        }
+			/*
+			// get lock
+			pthread_mutex_lock(&lock);
+			// send and receive to uart
+			if(!send_receive_packet(*pCommandReceived, pResponseToSend)){
+				// create a standard error packet
+				puts("Error sending and receiving from uart\n");
+				if(pResponseToSend->pData != 0){
+					free(pResponseToSend->pData);
+					pResponseToSend->pData = 0;
+				}
+				memset(pResponseToSend, 0, BUFFSIZE);
+
+				pResponseToSend->length = 8;   // initially 8 bytes
+				pResponseToSend->command = pCommandReceived->command;
+				pResponseToSend->status = 1;   // set to fail
+				pResponseToSend->checksum = 0;   // will get this from the receive buffer
+
+			}
+
+			// unlock
+			pthread_mutex_unlock(&lock);
+
+			//Send the response back to client
+			write(sock , pResponseToSend , pResponseToSend->length);
+
+			// free data
+			if(pResponseToSend->pData != 0)
+				free(pResponseToSend);
+
+			// clear the response buffer
 			memset(pResponseToSend, 0, BUFFSIZE);
-
-			pResponseToSend->length = 8;   // initially 8 bytes
-			pResponseToSend->command = pCommandReceived->command;
-			pResponseToSend->status = 1;   // set to fail
-			pResponseToSend->checksum = 0;   // will get this from the receive buffer
-
+	*/
 		}
-
-		// unlock
-		pthread_mutex_unlock(&lock);
-
-		//Send the response back to client
-        write(sock , pResponseToSend , pResponseToSend->length);
-
-        // free data
-        if(pResponseToSend->pData != 0)
-        	free(pResponseToSend);
-
-        // clear the response buffer
-		memset(pResponseToSend, 0, BUFFSIZE);
-*/
 		write(sock , client_message , strlen(client_message));
 
 		//clear the message buffer

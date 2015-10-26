@@ -243,12 +243,13 @@ bool send_receive_packet(struct command_packet sendPacket, struct response_packe
 		printf("Awaiting Response\n");
 		// Receive Response packet
 		// setup receive buffer
-		rxBuffer = (uint8_t*)malloc(respLen);
+		rxBuffer = (uint8_t*)malloc(200);
 		respLen = 2;
 		for (x = 0; x < respLen; x++){
 			nRec = read(mPort, &(rxBuffer[x]), 1);
 			if(nRec != 1){
 				printf("Failed Read Bytes: %d\n", nRec);
+				respLen = 0;
 			}
 			else{
 				printf("0x%X ", rxBuffer[x]);
@@ -259,38 +260,50 @@ bool send_receive_packet(struct command_packet sendPacket, struct response_packe
 			}
 		}
 
-		// set response data and calculate checksum and verify data
-		cksum = calculate_checksum16((uint16_t*)rxBuffer, respLen/2 - 1);
-		uint16_t* pTemp = (uint16_t*)rxBuffer;
-		pResponse->length = respLen; // length (command is already set
-		pTemp= (uint16_t*)(&rxBuffer[2]);
-		pResponse->command = *pTemp;
-		pTemp= (uint16_t*)(&rxBuffer[4]);
-		pResponse->status = *pTemp;
-
-		if((respLen-2)-6>0){		// 6 to len-2
-			int dLen = (respLen-2)-6;
+		if(respLen >0){
+			printf("Response Creating Packet\n");
+			// set response data and calculate checksum and verify data
+			cksum = calculate_checksum16((uint16_t*)rxBuffer, respLen/2 - 1);
+			uint16_t* pTemp = (uint16_t*)rxBuffer;
+			pResponse->length = respLen; // length (command is already set
+			pTemp= (uint16_t*)(&rxBuffer[2]);
+			pResponse->command = *pTemp;
+			pTemp= (uint16_t*)(&rxBuffer[4]);
+			pResponse->status = *pTemp;
 			pResponse->pData = 0;
-			pResponse->pData = malloc(dLen);
-			int x = 0;
-			int y = 0;
-			for(y = 0; y < dLen; y+=2){
-				pTemp = (uint16_t*)(&rxBuffer[6 + y]);
-				((uint16_t*)pResponse->pData)[x] = *pTemp;
-				x++;
+
+			if((respLen-2)-6>0){		// 6 to len-2
+				int dLen = (respLen-2)-6;
+				pResponse->pData = 0;
+				pResponse->pData = malloc(dLen);
+				int x = 0;
+				int y = 0;
+				for(y = 0; y < dLen; y+=2){
+					pTemp = (uint16_t*)(&rxBuffer[6 + y]);
+					((uint16_t*)pResponse->pData)[x] = *pTemp;
+					x++;
+				}
+
+			}else{
+				pResponse->pData = 0;
 			}
 
+			pTemp= (uint16_t*)(&rxBuffer[respLen-2]);
+			pResponse->checksum = *pTemp;
+			if(pResponse->checksum == cksum && pResponse->status == 0)
+				pResponse->status = 0;
+			else
+				pResponse->status = 1;
+
 		}else{
-			pResponse->pData = 0;
+			printf("Response Failed\n");
+			// make any changes to the fail response message
 		}
 
-		pTemp= (uint16_t*)(&rxBuffer[respLen-2]);
-		pResponse->checksum = *pTemp;
-		if(pResponse->checksum == cksum && pResponse->status == 0)
-			pResponse->status = 0;
-		else
-			pResponse->status = 1;
-
+		if(rxBuffer){
+			free(rxBuffer);
+			rxBuffer = 0;
+		}
 	}
 
 	return bRet;

@@ -40,7 +40,7 @@ int main(int argc, char *argv[]){
 			bSilent = true;
 		}
 	}
-
+	bool bResult = false;
 	printf("L3 ICD Server\n\n");
 	if(!bTest){
 	printf("TCP Server Program\n");
@@ -58,7 +58,10 @@ int main(int argc, char *argv[]){
 
 		// reticle testing
 		printf("Set Reticle Test\n");
-		if(!set_reticle(RETICLE_E)){
+		bResult = set_reticle(RETICLE_E);
+		printf("Set Reticle Completed\n");
+
+		if(!bResult){
 			printf("\nReticle Test Failed\n");
 		}else
 		{
