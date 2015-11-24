@@ -63,5 +63,6 @@ void set_blocking (int fd, int should_block);
 int open_port (char* portname);
 int close_port (void);
 bool send_receive_packet(struct command_packet sendPacket, struct response_packet* pResponse);
+bool send_receive_buffer(uint8_t* pSendBuffer, int sendSize, uint8_t* pReceiveBuffer, int* pRecSize);
 
 #endif /* D3_SERIAL_D3_COMMAND_PROC_H_ */
