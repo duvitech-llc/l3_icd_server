@@ -240,8 +240,7 @@ void *connection_handler(void *socket_desc)
 
 			}else{
 
-				printf("TEXT Command NOT Found\n");
-
+				printf("IP Address NOT Found\n");
 
 				// get lock for uart
 				printf("Get UART Lock\n");
