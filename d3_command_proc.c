@@ -181,6 +181,72 @@ void set_blocking (int fd, int should_block)
 	printf ("error %d setting term attributes %s\n", errno , strerror(errno));
 }
 
+bool send_receive_buffer(uint8_t* pSendBuffer, int sendSize, uint8_t* pReceiveBuffer, int* pRecSize){
+	int nSent = 0;
+	int respLen = 0;
+	int nRec = 0;
+	int x = 0;
+
+	uint8_t rxBuffer[2];
+
+	// clear buffer
+	memset(rxBuffer, 0, 2);
+
+	// if we have a send buffer and a size > 0 do it
+	if(sendSize>0 && pSendBuffer){
+		// send buffer provided
+		nSent = write(mPort, pSendBuffer, sendSize);
+		if(nSent != sendSize){
+			// failed to send
+			printf("Error send bytes do not match length\n");
+			return false;
+		}
+		else
+		{
+			// receive response
+			respLen = 2;
+			for (x = 0; x < respLen; x++){
+				if(x<2){
+					nRec = read(mPort, &(rxBuffer[x]), 1);
+				}else{
+					if(x < respLen)
+						nRec = read(mPort, &(pReceiveBuffer[x]), 1);
+					else{
+						// error to many bytes comming in
+						if(pReceiveBuffer)
+							free(pReceiveBuffer);
+						pReceiveBuffer = 0;
+						*pRecSize = 0;
+						return false;
+					}
+				}
+
+				if(nRec != 1){
+					printf("Failed Read Bytes: %d\n", nRec);
+					respLen = 0;
+				}
+				else{
+					printf("0x%X ", rxBuffer[x]);
+				}
+
+				if(x == 1){
+					respLen = (uint16_t)((rxBuffer[1]<<8)|rxBuffer[0]);
+					printf("Receive Buffer Sizce: %d\n", respLen);
+					pReceiveBuffer = malloc(respLen);
+					memcpy(pReceiveBuffer, rxBuffer, 2);
+				}
+			}
+
+			*pRecSize = respLen;
+			return true;
+
+		}
+
+	}
+
+	return false;
+}
+
 bool send_receive_packet(struct command_packet sendPacket, struct response_packet* pResponse){
 	uint8_t* txBuffer = 0;
 	bool bRet = true;

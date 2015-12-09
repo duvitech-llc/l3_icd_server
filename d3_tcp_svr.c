@@ -23,21 +23,23 @@
 #include "d3_command_proc.h"
 #include "nanocore_control_if.h"
 
-#include<stdio.h>
-#include<string.h>    //strlen
-#include<stdlib.h>    //strlen
-#include<sys/socket.h>
-#include<arpa/inet.h> //inet_addr
-#include<unistd.h>    //write
-#include<pthread.h> //for threading , link with lpthread
+#include <stdio.h>
+#include <string.h>    //strlen
+#include <stdlib.h>    //strlen
+#include <sys/socket.h>
+#include <arpa/inet.h> //inet_addr
+#include <unistd.h>    //write
+#include <pthread.h> //for threading , link with lpthread
+#include <signal.h>
 
 #define BUFFSIZE 255
 
 extern char* portname;
 int fd = 0;
+static int gst_pid = -1;
 
 pthread_mutex_t lock;
-
+static char gstreamCommand[440];
 
 //the thread function
 void *connection_handler(void *);
@@ -127,12 +129,16 @@ void *connection_handler(void *socket_desc)
 {
     //Get the socket descriptor
     int sock = *(int*)socket_desc;
+    FILE *pidFile;
     int read_size;
-    char *message , client_message[BUFFSIZE];
+    int status;
+    uint8_t *pRecMessage , client_message[BUFFSIZE];
     uint8_t transmitBuffer[BUFFSIZE];
-
+    int rec_size;
     struct command_packet pCommandReceived;
     struct response_packet ResponseToSend;
+	pRecMessage = 0;
+	rec_size = 0;
 
     // clear the response buffer
 	memset(transmitBuffer, 0, BUFFSIZE);
@@ -152,50 +158,132 @@ void *connection_handler(void *socket_desc)
         //end of string marker
 		client_message[read_size] = '\0';
 		// send the command to the UART
-		if(read_size>2){
-			pCommandReceived.length = read_size;
-			length = pCommandReceived.length;
+		if(read_size>5){					// min packet size is 6 bytes
+			length = read_size;
 
 			// decode packet
-			printf("Read PacketSize: %ul, ReadSize: %ul", read_size, length);
+			printf("Read PacketSize: %u, ReadSize: %u\n", read_size, length);
+			if(pRecMessage)
+				free(pRecMessage);
+			pRecMessage = 0;
+			rec_size = 0;
+			uint8_t *pIPString = 0;
+			uint8_t *pOffString = 0;
 
-			/*
-			// get lock
-			pthread_mutex_lock(&lock);
-			// send and receive to uart
-			if(!send_receive_packet(*pCommandReceived, pResponseToSend)){
-				// create a standard error packet
-				puts("Error sending and receiving from uart\n");
-				if(pResponseToSend->pData != 0){
-					free(pResponseToSend->pData);
-					pResponseToSend->pData = 0;
+			printf("Checking Client Message for IP Address\n");
+			pIPString = strstr(client_message, "IP=");
+			pOffString = strstr(client_message, "OFF");
+			if(pIPString != NULL){
+				// IP address received
+				char callerIP[10]={0};
+				printf("IP Address Found\n");
+				printf("Client MSG: %s\n", client_message);
+
+				printf("Clear Gstreamer Command\n");
+				memset(gstreamCommand, 0, 440);
+				pIPString+=3;
+				printf("Copying IP to Arg string\n");
+				printf("Copy args %s \n", pIPString);
+				memcpy(callerIP, pIPString,9);
+				sprintf(gstreamCommand, "gst-launch-0.10 -e v4l2src input-src=COMPOSITE  ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! TIVidenc1 codecName=h264enc engineName=codecServer ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > /var/run/gst-launch.pid", callerIP);
+
+				printf("gstreamer command: %s\n", gstreamCommand);
+				pIPString = 0;
+				ResponseToSend.length = 10;   // initially 8 bytes
+				ResponseToSend.command = 99;
+				ResponseToSend.pData = 0;
+				ResponseToSend.status = 1;   // set to fail
+				ResponseToSend.checksum = 0;   // will get this from the receive buffer
+
+				// call cam stream
+				printf("Stopping any current stream\n");
+
+			     pidFile = fopen("/var/run/gst-launch.pid", "r");
+			     if(pidFile != NULL ){
+			          fscanf(pidFile, "%d",&gst_pid);
+			          printf("Killing  %i\n", gst_pid);
+			          kill(gst_pid, SIGKILL);
+
+			          fclose(pidFile);
+			          unlink("/var/run/gst-launch.pid");
+
+			     }
+
+
+				// launch Gstreamer process
+				// create new process
+
+			     status = system(gstreamCommand);
+
+			     pidFile = fopen("/var/run/gst-launch.pid", "r");
+			     if(pidFile != NULL ){
+			    	  gst_pid=-1;
+					  fscanf(pidFile, "%d",&gst_pid);
+					  fclose(pidFile);
+					  if(gst_pid>=0)
+							ResponseToSend.status = 0;  // set to pass
+				 }
+
+			}else if(pOffString != NULL){
+				printf("Stopping any current stream\n");
+
+				 pidFile = fopen("/var/run/gst-launch.pid", "r");
+				 if(pidFile != NULL ){
+					  fscanf(pidFile, "%d",&gst_pid);
+					  printf("Killing  %i\n", gst_pid);
+					  kill(gst_pid, SIGKILL);
+
+					  fclose(pidFile);
+					  unlink("/var/run/gst-launch.pid");
+
+				 }
+
+			}else{
+
+				printf("TEXT Command NOT Found\n");
+
+
+				// get lock for uart
+				printf("Get UART Lock\n");
+				pthread_mutex_lock(&lock);
+				// send and receive to uart
+				if(!send_receive_buffer(&client_message, length, pRecMessage, &rec_size)){
+					// create a standard error packet
+					puts("Error sending and receiving from uart\n");
+					ResponseToSend.length = 10;   // initially 8 bytes
+					ResponseToSend.command = (uint16_t)((client_message[3]<<8)|client_message[2]);
+					ResponseToSend.pData = 0;
+					ResponseToSend.status = 1;   // set to fail
+					ResponseToSend.checksum = 0;   // will get this from the receive buffer
 				}
-				memset(pResponseToSend, 0, BUFFSIZE);
 
-				pResponseToSend->length = 8;   // initially 8 bytes
-				pResponseToSend->command = pCommandReceived->command;
-				pResponseToSend->status = 1;   // set to fail
-				pResponseToSend->checksum = 0;   // will get this from the receive buffer
+				// unlock uart
+				pthread_mutex_unlock(&lock);
 
+				printf("Release UART Lock\n");
 			}
 
-			// unlock
-			pthread_mutex_unlock(&lock);
-
+			printf("Send Response Back\n");
 			//Send the response back to client
-			write(sock , pResponseToSend , pResponseToSend->length);
+
+			// set response packet
+			rec_size = sizeof(ResponseToSend);
+			pRecMessage = malloc(rec_size);
+			memcpy(pRecMessage, (uint8_t*)(&ResponseToSend), rec_size);
+
+			write(sock , pRecMessage , rec_size);
 
 			// free data
-			if(pResponseToSend->pData != 0)
-				free(pResponseToSend);
+			if(pRecMessage != 0)
+				free(pRecMessage);
 
-			// clear the response buffer
-			memset(pResponseToSend, 0, BUFFSIZE);
-	*/
+			pRecMessage = 0;
+			rec_size = 0;
 		}
-		write(sock , client_message , strlen(client_message));
+
 
 		//clear the message buffer
+		printf("Clear Message Buffer\n");
 		memset(client_message, 0, BUFFSIZE);
     }
 
@@ -209,6 +297,7 @@ void *connection_handler(void *socket_desc)
         perror("recv failed");
     }
 
+    fflush(stdout);
     return 0;
 }
 

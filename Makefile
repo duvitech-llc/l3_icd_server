@@ -2,7 +2,7 @@
 -include ../Rules.make
 #CROSS_COMPILE?=		/opt/arm-2009q1/bin/arm-none-linux-gnueabi-
 CROSS_COMPILE?=		/home/linuser/CodeSourcery/Sourcery_G++_Lite/bin/arm-none-linux-gnueabi-
-COMPILE_OPTS =		$(INCLUDES) -I. -O2 -DSOCKLEN_T=socklen_t -DNO_SSTREAM=1 -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64  
+COMPILE_OPTS =		$(INCLUDES) -I. -O2 -DSOCKLEN_T=socklen_t -DNO_SSTREAM=1 -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64  -fPIC -D ALLOW_RTSP_SERVER_PORT_REUSE=1 
 C =			c
 C_COMPILER =		$(CROSS_COMPILE)gcc
 C_FLAGS =		$(COMPILE_OPTS)
