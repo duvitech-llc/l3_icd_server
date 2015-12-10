@@ -179,7 +179,7 @@ void *connection_handler(void *socket_desc)
 		// send the command to the UART
 		if(read_size>5){					// min packet size is 6 bytes
 			length = read_size;
-
+			pidFile = NULL;
 			// decode packet
 			printf("Read PacketSize: %u, ReadSize: %u\n", read_size, length);
 			if(pRecMessage)
@@ -193,7 +193,7 @@ void *connection_handler(void *socket_desc)
 
 			if(strstr(client_message, "IP=") != NULL){
 				// IP address received
-				printf("IP Address Found\n");
+				printf("IP Command\n");
 				printf("Client MSG: %s\n", client_message);
 
 				// mem copy IP into ip string for use
@@ -222,7 +222,7 @@ void *connection_handler(void *socket_desc)
 
 
 			}else if(strstr(client_message, "OFF") != NULL){
-				printf("Stopping any current stream\n");
+				printf("OFF Command\n");
 
 				pOffString = strstr(client_message, "OFF");
 				// kill streaming task
@@ -239,7 +239,7 @@ void *connection_handler(void *socket_desc)
 				// kill any already streaming task
 				stop_gst();
 
-				printf("Clear Gstreamer Command\n");
+				printf("VIEW Command\n");
 				memset(gstreamCommand, 0, 440);
 
 				sprintf(gstreamCommand, "gst-launch-0.10 -e v4l2src input-src=COMPOSITE  ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! TIVidenc1 codecName=h264enc engineName=codecServer ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > /var/run/gst-launch.pid", callerIP);
@@ -254,25 +254,31 @@ void *connection_handler(void *socket_desc)
 				// launch Gstreamer process
 				// create new process
 
-			     status = system(gstreamCommand);
+				if(callerIP != NULL){
+					status = system(gstreamCommand);
 
-			     pidFile = fopen("/var/run/gst-launch.pid", "r");
-			     if(pidFile != NULL ){
-			    	  gst_pid=-1;
-					  fscanf(pidFile, "%d",&gst_pid);
-					  fclose(pidFile);
-					  if(gst_pid>=0)
-							ResponseToSend.status = 0;  // set to pass
-				 }
+					pidFile = fopen("/var/run/gst-launch.pid", "r");
+					if(pidFile != NULL ){
+						  gst_pid=-1;
+						  fscanf(pidFile, "%d",&gst_pid);
+						  fclose(pidFile);
+						  if(gst_pid>=0)
+								ResponseToSend.status = 0;  // set to pass
+					}
+					pidFile = NULL;
+				}else{
+					printf("NO IPAddress set\n");
+					ResponseToSend.command = 98;
+				}
 
 			}else if(strstr(client_message, "REC") != NULL){
 				// kill any already streaming task
 				stop_gst();
 
-				printf("Clear Gstreamer Command\n");
+				printf("REC Command\n");
 				memset(gstreamCommand, 0, 440);
 
-				sprintf(gstreamCommand, "gst-launch-0.10 -e v4l2src input-src=COMPOSITE  ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! TIVidenc1 codecName=h264enc engineName=codecServer ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > /var/run/gst-launch.pid", callerIP);
+				sprintf(gstreamCommand, "gst-launch-0.10 -e v4l2src input-src=COMPOSITE  ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! TIVidenc1 codecName=h264enc engineName=codecServer ! filesink name=file location=/home/root/recording.264 sync=true enable-last-buffer=false > /dev/null & echo $! > /var/run/gst-launch.pid", callerIP);
 
 				printf("gstreamer command: %s\n", gstreamCommand);
 				ResponseToSend.length = 10;   // initially 8 bytes
@@ -294,44 +300,60 @@ void *connection_handler(void *socket_desc)
 					  if(gst_pid>=0)
 							ResponseToSend.status = 0;  // set to pass
 				 }
-
+			     pidFile = NULL;
 			}else if(strstr(client_message, "PLAY") != NULL){
 				// kill any already streaming task
 				stop_gst();
 
-				printf("Clear Gstreamer Command\n");
-				memset(gstreamCommand, 0, 440);
+				printf("PLAY Command\n");
 
-				sprintf(gstreamCommand, "gst-launch-0.10 -e v4l2src input-src=COMPOSITE  ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! TIVidenc1 codecName=h264enc engineName=codecServer ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > /var/run/gst-launch.pid", callerIP);
-
-				printf("gstreamer command: %s\n", gstreamCommand);
 				ResponseToSend.length = 10;   // initially 8 bytes
 				ResponseToSend.command = 99;
 				ResponseToSend.pData = 0;
 				ResponseToSend.status = 1;   // set to fail
 				ResponseToSend.checksum = 0;   // will get this from the receive buffer
 
-				// launch Gstreamer process
-				// create new process
+				// check for file
+				pidFile = fopen("/home/root/recording.264", "r");
+				if(pidFile == NULL ){
+					ResponseToSend.command = 97;  // file not found
+				}else{
+					// recording exists
+					pidFile = NULL;
+					memset(gstreamCommand, 0, 440);
 
-			     status = system(gstreamCommand);
+					sprintf(gstreamCommand, "gst-launch-0.10 -e filesrc location=/home/root/recording.264  ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! TIVidenc1 codecName=h264enc engineName=codecServer ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > /var/run/gst-launch.pid", callerIP);
 
-			     pidFile = fopen("/var/run/gst-launch.pid", "r");
-			     if(pidFile != NULL ){
-			    	  gst_pid=-1;
-					  fscanf(pidFile, "%d",&gst_pid);
-					  fclose(pidFile);
-					  if(gst_pid>=0)
-							ResponseToSend.status = 0;  // set to pass
-				 }
-			}else if(strstr(client_message, "STOP") != NULL){
+					printf("gstreamer command: %s\n", gstreamCommand);
+
+					// launch Gstreamer process
+					// create new process
+
+					if(callerIP != NULL){
+						status = system(gstreamCommand);
+
+						pidFile = fopen("/var/run/gst-launch.pid", "r");
+						if(pidFile != NULL ){
+							  gst_pid=-1;
+							  fscanf(pidFile, "%d",&gst_pid);
+							  fclose(pidFile);
+							  if(gst_pid>=0)
+									ResponseToSend.status = 0;  // set to pass
+						}
+						pidFile = NULL;
+					}else{
+						printf("NO IPAddress set\n");
+						ResponseToSend.command = 98;
+					}
+				}
+			}else if(strstr(client_message, "IMG") != NULL){
 				// kill any already streaming task
 				stop_gst();
 
-				printf("Clear Gstreamer Command\n");
+				printf("IMG Command\n");
 				memset(gstreamCommand, 0, 440);
 
-				sprintf(gstreamCommand, "gst-launch-0.10 -e v4l2src input-src=COMPOSITE  ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! TIVidenc1 codecName=h264enc engineName=codecServer ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > /var/run/gst-launch.pid", callerIP);
+				sprintf(gstreamCommand, "gst-launch-0.10 -e v4l2src input-src=COMPOSITE  ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! jpegenc !  filesink name=file location=/home/root/capture.jpg > /dev/null");
 
 				printf("gstreamer command: %s\n", gstreamCommand);
 				ResponseToSend.length = 10;   // initially 8 bytes
@@ -344,18 +366,35 @@ void *connection_handler(void *socket_desc)
 				// create new process
 
 			     status = system(gstreamCommand);
+			     ResponseToSend.status = 0;  // set to pass
 
-			     pidFile = fopen("/var/run/gst-launch.pid", "r");
-			     if(pidFile != NULL ){
-			    	  gst_pid=-1;
-					  fscanf(pidFile, "%d",&gst_pid);
-					  fclose(pidFile);
-					  if(gst_pid>=0)
-							ResponseToSend.status = 0;  // set to pass
-				 }
+			}else if(strstr(client_message, "GET") != NULL){
+				// kill any already streaming task
+				stop_gst();
+
+				printf("GET Command\n");
+
+				ResponseToSend.length = 10;   // initially 8 bytes
+				ResponseToSend.command = 99;
+				ResponseToSend.pData = 0;
+				ResponseToSend.status = 1;   // set to fail
+				ResponseToSend.checksum = 0;   // will get this from the receive buffer
+
+				// check for file
+				pidFile = fopen("/home/root/recording.264", "r");
+				if(pidFile == NULL ){
+					ResponseToSend.command = 97;  // file not found
+				}else{
+					ResponseToSend.length = 10; // set length
+					ResponseToSend.command = 96;  // image file
+				    ResponseToSend.status = 0;  // set to pass
+					ResponseToSend.pData = 0;  // set data
+					ResponseToSend.checksum = 0;   // set checksum
+				}
+
 			}else{
 
-				printf("IP Address NOT Found\n");
+				printf("Bin Command\n");
 
 				// get lock for uart
 				printf("Get UART Lock\n");
@@ -404,6 +443,7 @@ void *connection_handler(void *socket_desc)
     if(read_size == 0)
     {
         puts("Client disconnected");
+		memset(callerIP, 0, 10);
         fflush(stdout);
     }
     else if(read_size == -1)
