@@ -33,6 +33,31 @@
 #include <signal.h>
 
 #define BUFFSIZE 255
+/* D3 Stack Settings
+#define RECORDING_LOC_NAME 		"/home/root/recording.264"
+#define IMAGE_LOC_NAME 			"/home/root/capture.jpg"
+#define VIDEO_ENC_CODEC			"TIVidenc1 codecName=h264enc engineName=codecServer"
+#define VIDEO_DEC_CODEC			"TIViddec1 codecName=h264dec engineName=codecServer"
+#define VIDEO_SOURCE			"v4l2src input-src=COMPOSITE"
+#define PID_LOCATION			"/var/run/gst-launch.pid"
+#define IP_LEN					10
+*/
+
+/* testing settings */
+#define IP_LEN					13
+#define RECORDING_LOC_NAME 		"/home/linuser/recording.264"
+#define IMAGE_LOC_NAME 			"/home/linuser/capture.jpg"
+#define VIDEO_ENC_CODEC			"x264enc bitrate=5000"
+#define VIDEO_DEC_CODEC			"ffdec_h264"
+#define VIDEO_SOURCE			"videotestsrc"
+#define PID_LOCATION			"/home/linuser/gst-launch.pid"
+
+/* common to all configurations */
+#define GST_VIEW_COMMAND		"gst-launch-0.10 -e %s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! %s ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > %s"
+#define GST_PLAY_COMMAND		"gst-launch-0.10 -e filesrc location=%s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! %s ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > %s"
+//#define GST_REC_COMMAND			"gst-launch-0.10 -e %s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! %s ! tee name=t t. ! queue ! rtph264pay pt=96 ! udpsink port=5000 host=%s t. ! queue ! filesink name=file location=%s sync=true enable-last-buffer=false > /dev/null & echo $! > %s"
+#define GST_REC_COMMAND			"gst-launch-0.10 -e %s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! %s ! tee name=t t. ! queue ! rtph264pay pt=96 ! udpsink port=5000 host=%s t. ! queue ! filesink name=file location=%s sync=true > /dev/null & echo $! > %s"
+#define GST_IMG_COMMAND			""
 
 extern char* portname;
 int fd = 0;
@@ -40,7 +65,7 @@ static int gst_pid = -1;
 
 pthread_mutex_t lock;
 static char gstreamCommand[440];
-static char callerIP[10]={0};
+static char callerIP[16]={0};
 
 //the thread function
 void *connection_handler(void *);
@@ -48,7 +73,7 @@ void *connection_handler(void *);
 static void stop_gst(){
 	FILE *pidFile = NULL;
 
-	pidFile = fopen("/var/run/gst-launch.pid", "r");
+	pidFile = fopen(PID_LOCATION, "r");
 	if(pidFile != NULL ){
 	  printf("Stopping any current stream\n");
 	  fscanf(pidFile, "%d",&gst_pid);
@@ -56,7 +81,7 @@ static void stop_gst(){
 	  kill(gst_pid, SIGKILL);
 
 	  fclose(pidFile);
-	  unlink("/var/run/gst-launch.pid");
+	  unlink(PID_LOCATION);
 	}
 
 	pidFile = NULL;
@@ -177,7 +202,7 @@ void *connection_handler(void *socket_desc)
         //end of string marker
 		client_message[read_size] = '\0';
 		// send the command to the UART
-		if(read_size>5){					// min packet size is 6 bytes
+		if(read_size>1){					// min packet size is 6 bytes
 			length = read_size;
 			pidFile = NULL;
 			// decode packet
@@ -194,7 +219,7 @@ void *connection_handler(void *socket_desc)
 				printf("Client MSG: %s\n", client_message);
 
 				// mem copy IP into ip string for use
-				memset(callerIP, 0, 10);
+				memset(callerIP, 0, IP_LEN);
 				pIPString = strstr(client_message, "IP=");
 				pIPString+=3;
 
@@ -202,7 +227,7 @@ void *connection_handler(void *socket_desc)
 				stop_gst();
 
 				// copy ip to storage
-				memcpy(callerIP, pIPString, 9);
+				memcpy(callerIP, pIPString, IP_LEN-1);
 				pIPString = 0;
 
 				ResponseToSend.length = 10;   // initially 8 bytes
@@ -241,7 +266,7 @@ void *connection_handler(void *socket_desc)
 				printf("Client MSG: %s\n", client_message);
 				memset(gstreamCommand, 0, 440);
 
-				sprintf(gstreamCommand, "gst-launch-0.10 -e v4l2src input-src=COMPOSITE  ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! TIVidenc1 codecName=h264enc engineName=codecServer ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > /var/run/gst-launch.pid", callerIP);
+				sprintf(gstreamCommand, GST_VIEW_COMMAND, VIDEO_SOURCE, VIDEO_ENC_CODEC, callerIP, PID_LOCATION);
 
 				printf("gstreamer command: %s\n", gstreamCommand);
 				ResponseToSend.length = 10;   // initially 8 bytes
@@ -256,7 +281,7 @@ void *connection_handler(void *socket_desc)
 				if(callerIP != NULL){
 					status = system(gstreamCommand);
 
-					pidFile = fopen("/var/run/gst-launch.pid", "r");
+					pidFile = fopen(PID_LOCATION, "r");
 					if(pidFile != NULL ){
 						  gst_pid=-1;
 						  fscanf(pidFile, "%d",&gst_pid);
@@ -278,7 +303,7 @@ void *connection_handler(void *socket_desc)
 				printf("Client MSG: %s\n", client_message);
 				memset(gstreamCommand, 0, 440);
 
-				sprintf(gstreamCommand, "gst-launch-0.10 -e v4l2src input-src=COMPOSITE  ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! TIVidenc1 codecName=h264enc engineName=codecServer ! tee name=t t. ! queue ! rtph264pay pt=96 ! udpsink port=5000 host=%s t. ! queue ! filesink name=file location=/home/root/recording.264 sync=true enable-last-buffer=false > /dev/null & echo $! > /var/run/gst-launch.pid", callerIP);
+				sprintf(gstreamCommand, GST_REC_COMMAND, VIDEO_SOURCE, VIDEO_ENC_CODEC, callerIP, RECORDING_LOC_NAME, PID_LOCATION);
 
 				printf("gstreamer command: %s\n", gstreamCommand);
 				ResponseToSend.length = 10;   // initially 8 bytes
@@ -293,7 +318,7 @@ void *connection_handler(void *socket_desc)
 				if(callerIP != NULL){
 					status = system(gstreamCommand);
 
-					pidFile = fopen("/var/run/gst-launch.pid", "r");
+					pidFile = fopen(PID_LOCATION, "r");
 					if(pidFile != NULL ){
 						  gst_pid=-1;
 						  fscanf(pidFile, "%d",&gst_pid);
@@ -322,15 +347,16 @@ void *connection_handler(void *socket_desc)
 				ResponseToSend.checksum = 0;   // will get this from the receive buffer
 
 				// check for file
-				pidFile = fopen("/home/root/recording.264", "r");
+				pidFile = fopen(RECORDING_LOC_NAME, "r");
 				if(pidFile == NULL ){
+					printf("File Not Found\n");
 					ResponseToSend.command = 97;  // file not found
 				}else{
 					// recording exists
 					pidFile = NULL;
 					memset(gstreamCommand, 0, 440);
 
-					sprintf(gstreamCommand, "gst-launch-0.10 -e filesrc location=/home/root/recording.264  ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! TIVidenc1 codecName=h264enc engineName=codecServer ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > /var/run/gst-launch.pid", callerIP);
+					sprintf(gstreamCommand, GST_PLAY_COMMAND, RECORDING_LOC_NAME, VIDEO_ENC_CODEC, callerIP, PID_LOCATION);
 
 					printf("gstreamer command: %s\n", gstreamCommand);
 
@@ -340,7 +366,7 @@ void *connection_handler(void *socket_desc)
 					if(callerIP != NULL){
 						status = system(gstreamCommand);
 
-						pidFile = fopen("/var/run/gst-launch.pid", "r");
+						pidFile = fopen(PID_LOCATION, "r");
 						if(pidFile != NULL ){
 							  gst_pid=-1;
 							  fscanf(pidFile, "%d",&gst_pid);
@@ -452,7 +478,7 @@ void *connection_handler(void *socket_desc)
     if(read_size == 0)
     {
         puts("Client disconnected");
-		memset(callerIP, 0, 10);
+		memset(callerIP, 0, IP_LEN);
         fflush(stdout);
     }
     else if(read_size == -1)
