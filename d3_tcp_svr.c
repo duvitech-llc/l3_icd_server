@@ -44,20 +44,20 @@
 */
 
 /* testing settings */
-#define IP_LEN					13
-#define RECORDING_LOC_NAME 		"/home/linuser/recording.264"
-#define IMAGE_LOC_NAME 			"/home/linuser/capture.jpg"
+#define IP_LEN					14
+#define RECORDING_LOC_NAME 		"/home/builduser/recording.264"
+#define IMAGE_LOC_NAME 			"/home/builduser/capture.jpg"
 #define VIDEO_ENC_CODEC			"x264enc bitrate=5000"
 #define VIDEO_DEC_CODEC			"ffdec_h264"
 #define VIDEO_SOURCE			"videotestsrc"
-#define PID_LOCATION			"/home/linuser/gst-launch.pid"
+#define PID_LOCATION			"/home/builduser/gst-launch.pid"
 
 /* common to all configurations */
 #define GST_VIEW_COMMAND		"gst-launch-0.10 -e %s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! %s ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > %s"
 #define GST_PLAY_COMMAND		"gst-launch-0.10 -e filesrc location=%s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! %s ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > %s"
 //#define GST_REC_COMMAND			"gst-launch-0.10 -e %s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! %s ! tee name=t t. ! queue ! rtph264pay pt=96 ! udpsink port=5000 host=%s t. ! queue ! filesink name=file location=%s sync=true enable-last-buffer=false > /dev/null & echo $! > %s"
 #define GST_REC_COMMAND			"gst-launch-0.10 -e %s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! %s ! tee name=t t. ! queue ! rtph264pay pt=96 ! udpsink port=5000 host=%s t. ! queue ! filesink name=file location=%s sync=true > /dev/null & echo $! > %s"
-#define GST_IMG_COMMAND			""
+#define GST_IMG_COMMAND			"gst-launch-0.10 -e %s num-buffers=1 ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! jpegenc !  filesink name=file location=%s> /dev/null"
 
 extern char* portname;
 int fd = 0;
@@ -388,7 +388,7 @@ void *connection_handler(void *socket_desc)
 				printf("Client MSG: %s\n", client_message);
 				memset(gstreamCommand, 0, 440);
 
-				sprintf(gstreamCommand, "gst-launch-0.10 -e v4l2src input-src=COMPOSITE num-buffers=1 ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! jpegenc !  filesink name=file location=/home/root/capture.jpg > /dev/null");
+				sprintf(gstreamCommand, GST_IMG_COMMAND, VIDEO_SOURCE, IMAGE_LOC_NAME );
 
 				printf("gstreamer command: %s\n", gstreamCommand);
 				ResponseToSend.length = 10;   // initially 8 bytes
@@ -417,7 +417,7 @@ void *connection_handler(void *socket_desc)
 				ResponseToSend.checksum = 0;   // will get this from the receive buffer
 
 				// check for file
-				pidFile = fopen("/home/root/capture.jpg", "r");
+				pidFile = fopen(IMAGE_LOC_NAME, "r");
 				if(pidFile == NULL ){
 					ResponseToSend.command = 97;  // file not found
 				}else{
