@@ -33,17 +33,17 @@
 #include <signal.h>
 
 #define BUFFSIZE 255
-/* D3 Stack Settings
+/* D3 Stack Settings */
 #define RECORDING_LOC_NAME 		"/home/root/recording.264"
 #define IMAGE_LOC_NAME 			"/home/root/capture.jpg"
 #define VIDEO_ENC_CODEC			"TIVidenc1 codecName=h264enc engineName=codecServer"
-#define VIDEO_DEC_CODEC			"TIViddec1 codecName=h264dec engineName=codecServer"
+#define VIDEO_DEC_CODEC			"TIViddec2 codecName=h264dec engineName=codecServer"
 #define VIDEO_SOURCE			"v4l2src input-src=COMPOSITE"
 #define PID_LOCATION			"/var/run/gst-launch.pid"
 #define IP_LEN					10
-*/
 
-/* testing settings */
+
+/* testing settings
 #define IP_LEN					14
 #define RECORDING_LOC_NAME 		"/home/builduser/recording.mp4"
 #define IMAGE_LOC_NAME 			"/home/builduser/capture.jpg"
@@ -51,6 +51,8 @@
 #define VIDEO_DEC_CODEC			"ffdec_h264"
 #define VIDEO_SOURCE			"videotestsrc"
 #define PID_LOCATION			"/home/builduser/gst-launch.pid"
+*/
+
 
 /* encrypt to file
  * gst-launch videotestsrc num-buffers=1000 ! video/x-raw-yuv, format=(fourcc)NV12 ! TIVidenc1 codecName=h264enc engineName=codecServer ! filesink location=output_gen_D1.264
