@@ -45,19 +45,27 @@
 
 /* testing settings */
 #define IP_LEN					14
-#define RECORDING_LOC_NAME 		"/home/builduser/recording.264"
+#define RECORDING_LOC_NAME 		"/home/builduser/recording.mp4"
 #define IMAGE_LOC_NAME 			"/home/builduser/capture.jpg"
-#define VIDEO_ENC_CODEC			"x264enc bitrate=5000"
+#define VIDEO_ENC_CODEC			"x264enc"
 #define VIDEO_DEC_CODEC			"ffdec_h264"
 #define VIDEO_SOURCE			"videotestsrc"
 #define PID_LOCATION			"/home/builduser/gst-launch.pid"
 
+/* encrypt to file
+ * gst-launch videotestsrc num-buffers=1000 ! video/x-raw-yuv, format=(fourcc)NV12 ! TIVidenc1 codecName=h264enc engineName=codecServer ! filesink location=output_gen_D1.264
+ * gst-launch -v v4l2src always-copy=FALSE num-buffers=800 input-src=composite ! video/x-raw-yuv,format=(fourcc)NV12,width=640,height=480 ! TIVidenc1 codecName=h264enc engineName=codecServer ! filesink location=output_cap_D1.264
+ * gst-launch-0.10 filesrc location=my.mp4 ! mpeg2dec ! ffmpegcolorspace ! autovideosink
+ *
+ */
+
 /* common to all configurations */
 #define GST_VIEW_COMMAND		"gst-launch-0.10 -e %s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! %s ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > %s"
-#define GST_PLAY_COMMAND		"gst-launch-0.10 -e filesrc location=%s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! %s ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > %s"
+#define GST_PLAY_COMMAND		"gst-launch-0.10 -e filesrc location=%s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! %s ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > %s"
 //#define GST_REC_COMMAND			"gst-launch-0.10 -e %s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! %s ! tee name=t t. ! queue ! rtph264pay pt=96 ! udpsink port=5000 host=%s t. ! queue ! filesink name=file location=%s sync=true enable-last-buffer=false > /dev/null & echo $! > %s"
-#define GST_REC_COMMAND			"gst-launch-0.10 -e %s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! %s ! tee name=t t. ! queue ! rtph264pay pt=96 ! udpsink port=5000 host=%s t. ! queue ! filesink name=file location=%s sync=true > /dev/null & echo $! > %s"
-#define GST_IMG_COMMAND			"gst-launch-0.10 -e %s num-buffers=1 ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! jpegenc !  filesink name=file location=%s> /dev/null"
+#define GST_REC_COMMAND			"gst-launch-0.10 -e %s ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! %s ! tee name=t t. ! queue ! rtph264pay pt=96 ! udpsink port=5000 host=%s t. ! queue ! filesink location=%s sync=true > /dev/null & echo $! > %s"
+#define GST_IMG_COMMAND			"gst-launch-0.10 -e %s num-buffers=1 ! capsfilter caps=video/x-raw-yuv,format=\\(fourcc\\)NV12,width=640,height=480 ! ffmpegcolorspace ! jpegenc !  filesink location=%s> /dev/null"
+#define GST_TEST_COMMAND		"gst-launch-0.10 filesrc location=/home/builduser/recording.mp4 ! mpeg2dec ! ffmpegcolorspace ! %s ! rtph264pay pt=96 ! udpsink port=5000 host=%s > /dev/null & echo $! > %s"
 
 extern char* portname;
 int fd = 0;
@@ -356,8 +364,8 @@ void *connection_handler(void *socket_desc)
 					pidFile = NULL;
 					memset(gstreamCommand, 0, 440);
 
-					sprintf(gstreamCommand, GST_PLAY_COMMAND, RECORDING_LOC_NAME, VIDEO_ENC_CODEC, callerIP, PID_LOCATION);
-
+					//sprintf(gstreamCommand, GST_PLAY_COMMAND, RECORDING_LOC_NAME, VIDEO_DEC_CODEC, callerIP, PID_LOCATION);
+					sprintf(gstreamCommand, GST_TEST_COMMAND, VIDEO_ENC_CODEC, callerIP, PID_LOCATION);
 					printf("gstreamer command: %s\n", gstreamCommand);
 
 					// launch Gstreamer process
