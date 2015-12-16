@@ -53,7 +53,7 @@ int main(int argc, char *argv[]){
 			return 1;
 		}else
 		{
-			printf("COM Port opened\n", errno);
+			printf("COM Port opened\n");
 		}
 
 		// reticle testing

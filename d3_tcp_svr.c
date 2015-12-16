@@ -33,25 +33,24 @@
 #include <signal.h>
 
 #define BUFFSIZE 255
-/* D3 Stack Settings */
+/* D3 Stack Settings
 #define RECORDING_LOC_NAME 		"/home/root/recording.264"
 #define IMAGE_LOC_NAME 			"/home/root/capture.jpg"
 #define VIDEO_ENC_CODEC			"TIVidenc1 codecName=h264enc engineName=codecServer"
 #define VIDEO_DEC_CODEC			"TIViddec2 codecName=h264dec engineName=codecServer"
 #define VIDEO_SOURCE			"v4l2src input-src=COMPOSITE"
 #define PID_LOCATION			"/var/run/gst-launch.pid"
-#define IP_LEN					10
+*/
 
 
-/* testing settings
-#define IP_LEN					14
+
+/* testing settings */
 #define RECORDING_LOC_NAME 		"/home/builduser/recording.mp4"
 #define IMAGE_LOC_NAME 			"/home/builduser/capture.jpg"
 #define VIDEO_ENC_CODEC			"x264enc"
 #define VIDEO_DEC_CODEC			"ffdec_h264"
 #define VIDEO_SOURCE			"videotestsrc"
 #define PID_LOCATION			"/home/builduser/gst-launch.pid"
-*/
 
 
 /* encrypt to file
@@ -114,7 +113,7 @@ int start_tcp_listener(void){
     fd = open_port(portname);
 	if(fd<0){
 		puts("error opening port\n");
-		return 1;
+		//return 1;
 	}else
 	{
 		puts("COM Port opened\n");
@@ -193,6 +192,7 @@ void *connection_handler(void *socket_desc)
     struct response_packet ResponseToSend;
 	pRecMessage = 0;
 	rec_size = 0;
+    int IP_LEN = 16;
 
     // clear the response buffer
 	memset(transmitBuffer, 0, BUFFSIZE);
@@ -227,6 +227,9 @@ void *connection_handler(void *socket_desc)
 				// IP address received
 				printf("IP Command\n");
 				printf("Client MSG: %s\n", client_message);
+
+				IP_LEN = strlen(client_message) - 2; // really -3 for IP= but accounting for null char
+				printf("Size: %u\n",IP_LEN);
 
 				// mem copy IP into ip string for use
 				memset(callerIP, 0, IP_LEN);
@@ -446,7 +449,7 @@ void *connection_handler(void *socket_desc)
 				printf("Get UART Lock\n");
 				pthread_mutex_lock(&lock);
 				// send and receive to uart
-				if(!send_receive_buffer(&client_message, length, pRecMessage, &rec_size)){
+				if(!send_receive_buffer(client_message, length, pRecMessage, &rec_size)){
 					// create a standard error packet
 					puts("Error sending and receiving from uart\n");
 					ResponseToSend.length = 10;   // initially 8 bytes
