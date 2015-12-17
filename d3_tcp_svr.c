@@ -27,31 +27,32 @@
 #include <string.h>    //strlen
 #include <stdlib.h>    //strlen
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <arpa/inet.h> //inet_addr
 #include <unistd.h>    //write
 #include <pthread.h> //for threading , link with lpthread
 #include <signal.h>
 
 #define BUFFSIZE 255
-/* D3 Stack Settings */
+/* D3 Stack Settings
 #define RECORDING_LOC_NAME 		"/home/root/recording.mp4"
 #define IMAGE_LOC_NAME 			"/home/root/capture.jpg"
 #define VIDEO_ENC_CODEC			"TIVidenc1 codecName=h264enc engineName=codecServer"
 #define VIDEO_DEC_CODEC			"TIViddec2 codecName=h264dec engineName=codecServer"
 #define VIDEO_SOURCE			"v4l2src input-src=COMPOSITE"
 #define PID_LOCATION			"/var/run/gst-launch.pid"
+ */
 
 
 
-
-/* testing settings
+/* testing settings*/
 #define RECORDING_LOC_NAME 		"/home/builduser/recording.mp4"
 #define IMAGE_LOC_NAME 			"/home/builduser/capture.jpg"
 #define VIDEO_ENC_CODEC			"x264enc"
 #define VIDEO_DEC_CODEC			"ffdec_h264"
 #define VIDEO_SOURCE			"videotestsrc"
 #define PID_LOCATION			"/home/builduser/gst-launch.pid"
-*/
+
 
 /* encrypt to file
  * gst-launch videotestsrc num-buffers=1000 ! video/x-raw-yuv, format=(fourcc)NV12 ! TIVidenc1 codecName=h264enc engineName=codecServer ! filesink location=output_gen_D1.264
@@ -181,6 +182,7 @@ void *connection_handler(void *socket_desc)
 {
     //Get the socket descriptor
     int sock = *(int*)socket_desc;
+    int bin_cmd = 0;
     FILE *pidFile;
     int read_size;
     int status;
@@ -242,7 +244,7 @@ void *connection_handler(void *socket_desc)
 				memcpy(callerIP, pIPString, IP_LEN-1);
 				pIPString = 0;
 
-				ResponseToSend.length = 10;   // initially 8 bytes
+				ResponseToSend.length = 8;   // initially 8 bytes
 				ResponseToSend.command = 99;
 				ResponseToSend.pData = 0;
 				ResponseToSend.status = 1;   // set to fail
@@ -262,12 +264,12 @@ void *connection_handler(void *socket_desc)
 				pOffString = strstr(client_message, "OFF");
 				// kill streaming task
 				stop_gst();
-				ResponseToSend.length = 10;   // initially 8 bytes
+				ResponseToSend.length = 8;   // initially 8 bytes
 				ResponseToSend.command = 99;
 				ResponseToSend.pData = 0;
-				ResponseToSend.status = 1;   // set to fail
-				ResponseToSend.checksum = 0;   // will get this from the receive buffer
-				ResponseToSend.status = 0;   // set to pass
+				ResponseToSend.status = 0x5051;   // set to pass
+				ResponseToSend.checksum = 0x6D6E;   // will get this from the receive buffer
+
 
 
 			}else if(strstr(client_message, "VIEW") != NULL){
@@ -281,7 +283,7 @@ void *connection_handler(void *socket_desc)
 				sprintf(gstreamCommand, GST_VIEW_COMMAND, VIDEO_SOURCE, VIDEO_ENC_CODEC, callerIP, PID_LOCATION);
 
 				printf("gstreamer command: %s\n", gstreamCommand);
-				ResponseToSend.length = 10;   // initially 8 bytes
+				ResponseToSend.length = 8;   // initially 8 bytes
 				ResponseToSend.command = 99;
 				ResponseToSend.pData = 0;
 				ResponseToSend.status = 1;   // set to fail
@@ -295,6 +297,7 @@ void *connection_handler(void *socket_desc)
 
 					pidFile = fopen(PID_LOCATION, "r");
 					if(pidFile != NULL ){
+
 						  gst_pid=-1;
 						  fscanf(pidFile, "%d",&gst_pid);
 						  fclose(pidFile);
@@ -318,7 +321,7 @@ void *connection_handler(void *socket_desc)
 				sprintf(gstreamCommand, GST_REC_COMMAND, VIDEO_SOURCE, VIDEO_ENC_CODEC, callerIP, RECORDING_LOC_NAME, PID_LOCATION);
 
 				printf("gstreamer command: %s\n", gstreamCommand);
-				ResponseToSend.length = 10;   // initially 8 bytes
+				ResponseToSend.length = 8;   // initially 8 bytes
 				ResponseToSend.command = 99;
 				ResponseToSend.pData = 0;
 				ResponseToSend.status = 1;   // set to fail
@@ -352,7 +355,7 @@ void *connection_handler(void *socket_desc)
 				printf("PLAY Command\n");
 				printf("Client MSG: %s\n", client_message);
 
-				ResponseToSend.length = 10;   // initially 8 bytes
+				ResponseToSend.length = 8;   // initially 8 bytes
 				ResponseToSend.command = 99;
 				ResponseToSend.pData = 0;
 				ResponseToSend.status = 1;   // set to fail
@@ -395,15 +398,26 @@ void *connection_handler(void *socket_desc)
 			}else if(strstr(client_message, "IMG") != NULL){
 				// kill any already streaming task
 				stop_gst();
-
+				FILE *fCapture = NULL;
 				printf("IMG Command\n");
 				printf("Client MSG: %s\n", client_message);
 				memset(gstreamCommand, 0, 440);
 
 				sprintf(gstreamCommand, GST_IMG_COMMAND, VIDEO_SOURCE, IMAGE_LOC_NAME );
 
+				// check if existing capture
+				fCapture = fopen(PID_LOCATION, "r");
+				if(fCapture != NULL ){
+				  // delete old capture file
+				  fclose(fCapture);
+				  unlink(IMAGE_LOC_NAME);
+
+				  fCapture = NULL;
+				}
+
+
 				printf("gstreamer command: %s\n", gstreamCommand);
-				ResponseToSend.length = 10;   // initially 8 bytes
+				ResponseToSend.length = 8;   // initially 8 bytes
 				ResponseToSend.command = 99;
 				ResponseToSend.pData = 0;
 				ResponseToSend.status = 1;   // set to fail
@@ -412,38 +426,52 @@ void *connection_handler(void *socket_desc)
 				// launch Gstreamer process
 				// create new process
 
-			     status = system(gstreamCommand);
-			     ResponseToSend.status = 0;  // set to pass
+			    status = system(gstreamCommand);
+			    // check for jpeg
+				fCapture = fopen(PID_LOCATION, "r");
+				if(fCapture != NULL ){
+				  // success
+				  fclose(fCapture);
+				  ResponseToSend.status = 0;  // set to pass
+				  fCapture = NULL;
+				}
 
 			}else if(strstr(client_message, "GET") != NULL){
 				// kill any already streaming task
 				stop_gst();
-
+				FILE* pImageFile = NULL;
 				printf("GET Command\n");
 				printf("Client MSG: %s\n", client_message);
 
-				ResponseToSend.length = 10;   // initially 8 bytes
+				ResponseToSend.length = 8;   // initially 8 bytes
 				ResponseToSend.command = 99;
 				ResponseToSend.pData = 0;
 				ResponseToSend.status = 1;   // set to fail
 				ResponseToSend.checksum = 0;   // will get this from the receive buffer
 
 				// check for file
-				pidFile = fopen(IMAGE_LOC_NAME, "r");
-				if(pidFile == NULL ){
+				pImageFile = fopen(IMAGE_LOC_NAME, "r");
+				if(pImageFile == NULL ){
 					ResponseToSend.command = 97;  // file not found
 				}else{
-					ResponseToSend.length = 10; // set length
+					// read file and add send to client
+					struct stat st;
+					fclose(pImageFile);
+					pImageFile = NULL;
+					stat(IMAGE_LOC_NAME, &st);
+
+					ResponseToSend.length = 8 + st.st_size; // set length
 					ResponseToSend.command = 96;  // image file
 				    ResponseToSend.status = 0;  // set to pass
 					ResponseToSend.pData = 0;  // set data
 					ResponseToSend.checksum = 0;   // set checksum
+
 				}
 
 			}else{
 
 				printf("Bin Command\n");
-
+				bin_cmd = 1;
 				// get lock for uart
 				printf("Get UART Lock\n");
 				pthread_mutex_lock(&lock);
@@ -451,7 +479,7 @@ void *connection_handler(void *socket_desc)
 				if(!send_receive_buffer(client_message, length, pRecMessage, &rec_size)){
 					// create a standard error packet
 					puts("Error sending and receiving from uart\n");
-					ResponseToSend.length = 10;   // initially 8 bytes
+					ResponseToSend.length = 8;   // initially 8 bytes
 					ResponseToSend.command = (uint16_t)((client_message[3]<<8)|client_message[2]);
 					ResponseToSend.pData = 0;
 					ResponseToSend.status = 1;   // set to fail
@@ -467,17 +495,79 @@ void *connection_handler(void *socket_desc)
 			printf("Send Response Back\n");
 			//Send the response back to client
 
-			// set response packet
-			rec_size = sizeof(ResponseToSend);
-			pRecMessage = malloc(rec_size);
-			memcpy(pRecMessage, (uint8_t*)(&ResponseToSend), rec_size);
+			if(bin_cmd > 0){
+				// pass data back from UART
+				write(sock , pRecMessage , rec_size);
+			}else
+			{
+				// set response packet
+				rec_size = ResponseToSend.length;
+				printf("Send Response Back Size: %u\n",rec_size);
+				pRecMessage = malloc(BUFFSIZE);
 
-			write(sock , pRecMessage , rec_size);
+				write(sock , (uint8_t*)(&ResponseToSend) , 6);
+				memset(pRecMessage, 0, BUFFSIZE);
+
+				if(ResponseToSend.pData !=0 || ResponseToSend.command == 96){
+					int datasize = rec_size - 8;
+					uint16_t* pData = 0;
+					if(ResponseToSend.command == 96){
+						// copy file to socket
+						FILE* pImageFile = NULL;
+						pImageFile = fopen(IMAGE_LOC_NAME, "r");
+						if(pImageFile != NULL ){
+							size_t bytes_read = 0;
+							while (!feof(pImageFile)) {
+								bytes_read = fread(pRecMessage,sizeof(unsigned char), BUFFSIZE-1,pImageFile);
+								pRecMessage[bytes_read] = 0;
+								write(sock , pRecMessage , bytes_read);
+							}
+
+							fclose(pImageFile);
+							pImageFile = NULL;
+							ResponseToSend.pData = 0;
+							//unlink(IMAGE_LOC_NAME);
+						}
+					}else{
+						// set pData to the data pointer
+						pData = ResponseToSend.pData;
+
+						while(datasize >0){
+							if(datasize>BUFFSIZE){
+								memcpy(pRecMessage, (uint8_t*)pData, BUFFSIZE);
+								write(sock , pRecMessage , BUFFSIZE);
+								pData += BUFFSIZE;
+								datasize -= BUFFSIZE;
+							}
+							else{
+								memcpy(pRecMessage, (uint8_t*)pData, datasize);
+								write(sock , pRecMessage , datasize);
+								datasize = 0;
+							}
+
+							memset(pRecMessage, 0, BUFFSIZE);
+
+						}
+					}
+
+
+					// we sent the data now free it
+					if(ResponseToSend.pData != NULL){
+						free(ResponseToSend.pData);
+						ResponseToSend.pData = 0;
+					}
+					pData = 0;
+				}
+
+				write(sock , &ResponseToSend.checksum , 2);
+
+				memset(pRecMessage, 0, BUFFSIZE);
+
+			}
 
 			// free data
 			if(pRecMessage != 0)
 				free(pRecMessage);
-
 			pRecMessage = 0;
 			rec_size = 0;
 		}
