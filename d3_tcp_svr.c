@@ -428,13 +428,7 @@ void *connection_handler(void *socket_desc)
 
 			    status = system(gstreamCommand);
 			    // check for jpeg
-				fCapture = fopen(PID_LOCATION, "r");
-				if(fCapture != NULL ){
-				  // success
-				  fclose(fCapture);
-				  ResponseToSend.status = 0;  // set to pass
-				  fCapture = NULL;
-				}
+			    ResponseToSend.status = 0;  // set to pass
 
 			}else if(strstr(client_message, "GET") != NULL){
 				// kill any already streaming task
@@ -518,9 +512,27 @@ void *connection_handler(void *socket_desc)
 						if(pImageFile != NULL ){
 							size_t bytes_read = 0;
 							while (!feof(pImageFile)) {
-								bytes_read = fread(pRecMessage,sizeof(unsigned char), BUFFSIZE-1,pImageFile);
-								pRecMessage[bytes_read] = 0;
-								write(sock , pRecMessage , bytes_read);
+								bzero(pRecMessage,BUFFSIZE);
+								bytes_read = fread(pRecMessage,sizeof(unsigned char), BUFFSIZE,pImageFile);
+								if(bytes_read == 0)
+									break;
+
+								if (bytes_read < 0)
+									printf("ERROR reading from file");
+								else{
+									void *p = pRecMessage;
+									while (bytes_read > 0)
+									{
+										int bytes_written = write(sock, pRecMessage, bytes_read);
+										if (bytes_written <= 0)
+										{
+											printf("ERROR writing to socket\n");
+										}
+										bytes_read -= bytes_written;
+										p += bytes_written;
+									}
+								}
+
 							}
 
 							fclose(pImageFile);
@@ -553,15 +565,17 @@ void *connection_handler(void *socket_desc)
 
 					// we sent the data now free it
 					if(ResponseToSend.pData != NULL){
+						printf("Freeing pData memory");
 						free(ResponseToSend.pData);
 						ResponseToSend.pData = 0;
 					}
 					pData = 0;
 				}
 
+				// write checksum
 				write(sock , &ResponseToSend.checksum , 2);
 
-				memset(pRecMessage, 0, BUFFSIZE);
+				bzero(pRecMessage,BUFFSIZE);
 
 			}
 
