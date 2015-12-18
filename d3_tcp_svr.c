@@ -46,12 +46,12 @@
 
 
 /* testing settings*/
-#define RECORDING_LOC_NAME 		"/home/linuser/recording.mp4"
-#define IMAGE_LOC_NAME 			"/home/linuser/capture.jpg"
+#define RECORDING_LOC_NAME 		"/home/builduser/recording.mp4"
+#define IMAGE_LOC_NAME 			"/home/builduser/capture.jpg"
 #define VIDEO_ENC_CODEC			"x264enc"
 #define VIDEO_DEC_CODEC			"ffdec_h264"
 #define VIDEO_SOURCE			"videotestsrc"
-#define PID_LOCATION			"/home/linuser/gst-launch.pid"
+#define PID_LOCATION			"/home/builduser/gst-launch.pid"
 
 
 /* encrypt to file
